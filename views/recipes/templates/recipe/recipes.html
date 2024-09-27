@@ -1,0 +1,112 @@
+{% extends "layouts/base.html" %}
+<!-- Custom block for standardizing Project Data-->
+{% block head %}
+    <link href="https://static.tumblr.com/p0knose/fW7nwe95q/normalize.css" rel="stylesheet">
+
+    <script src="https://static.tumblr.com/fuu6t9w/eubml0pm0/jquery.isotope.min.js"></script>
+    <script src="https://static.tumblr.com/aptzszz/s5fp15zyp/candlelight.js"></script>
+{% endblock %}
+
+{% block style %}
+
+    /* language toggle effect */
+    .toggle:hover, button:hover {
+        background-color: blue;
+        color: whitesmoke;
+    }
+
+    /* position for filter buttons */
+    .filters {
+        width:60vw;
+        margin:50px auto 30px;
+        font-family: Alata;
+    }
+
+    body {
+        background:#fff;
+        font-family:'Fraunces', serif;
+        font-size:14px;
+        font-weight:300;
+        line-height:190%;
+        color: whitesmoke;
+        -webkit-animation-name: fadein;
+        -webkit-animation-duration: 1s;
+        -moz-osx-font-smoothing:grayscale;
+        -webkit-font-smoothing:antialiased;
+        font-smoothing:antialiased;
+    }
+
+    /* card/article in body */
+    article {
+        position:center;
+        width:260px;
+        margin:20px 100px;
+        box-sizing:border-box;
+        padding:15px;
+        border:1px solid #eee;
+        display:inline-block;
+        transition-duration:.35s;
+        -moz-transition-duration:.35s;
+        -webkit-transition-duration:.35s;
+        -o-transition-duration:.35s;
+    }
+
+    /* center text in card/article body */
+    .center {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* h1 in card */
+    h1 {
+        font-weight:400;
+        color: white;
+        font-size:16px;
+        display:inline;
+        border-bottom:1px solid #a4afc1;
+    }
+
+{% endblock %}
+
+{% block body %}
+<form method="POST" ID="toggle" action="/recipe/viewer">
+    <button class="toggle">{{ recipes.prompt }}</button>
+</form>
+
+<div class="filters">
+    <!-- recipe filters -->
+    {% for filter in recipes.filters %}
+        <div class="button-group js-radio-button-group" data-filter-group="keys">
+            <b><button class="button is-checked" data-filter="">{{ filter["key"].upper() }}</button></b>
+            {% for data in filter["data"] %}
+                <button class="button" data-filter=".{{ data.upper() }}"> {{ data.lower() }} </button>
+            {% endfor %}
+        </div>
+    {% endfor %}
+</div>
+
+<section>
+    <!-- recipe cards -->
+    {% for recipe in recipes.list %}
+        {% set keys = recipe["keys"] %}
+        <article class="{{ keys.upper() }}">
+            {% if recipes.default %}
+                <h1>{{ recipe["name"] }}</h1><br><i>{{ recipe["jpn"] }}</i> <!-- English -->
+            {% else %}
+                <h1>{{ recipe["jpn"] }}</h1><br><i>{{ recipe["name"] }}</i> <!-- Japanese -->
+            {% endif %}
+            <div class="d">
+                <img src="{{ url_for('recipe.static', filename=recipe['image']) }}" width="100" height="100" class="center">
+                {{recipe["description"]}}
+            </div>
+        </article>
+    {% endfor %}
+</section>
+
+<!-- Back to Top -->
+<div class="backToTop">
+    <a class="scrollToTop" href="javascript:;" id="scrollToTop" rel="nofollow" title="To top">↑</a>
+    <div id="scrollToTopSymbol">↑</div>
+</div>
+{% endblock %}
