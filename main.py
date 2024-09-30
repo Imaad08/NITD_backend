@@ -12,10 +12,12 @@ from api.joke import joke_api
 from api.user import user_api 
 from api.player import player_api
 from api.titanic import titanic_api
+from api.turtle_game_player import turtle_game_api
 # database Initialization functions
 from model.users import User, initUsers 
 from model.players import initPlayers
 from model.titanicML import initTitanic
+from model.turtle_game_players import initTurtlePlayers
 # server only Views
 from views.algorithm.algorithm import algorithm_views 
 from views.recipes.recipe import recipe_views 
@@ -30,6 +32,7 @@ app.register_blueprint(covid_api)
 app.register_blueprint(user_api) 
 app.register_blueprint(player_api)
 app.register_blueprint(titanic_api)
+app.register_blueprint(turtle_game_api)
 # register URIs for server pages
 app.register_blueprint(algorithm_views) 
 app.register_blueprint(recipe_views) 
@@ -86,6 +89,7 @@ def generate_data():
     initUsers()
     initPlayers()
     initTitanic()
+    initTurtlePlayers()
 
 # Register the custom command group with the Flask application
 app.cli.add_command(custom_cli)
