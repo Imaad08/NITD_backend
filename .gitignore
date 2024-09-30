@@ -13,7 +13,7 @@ env.bak/
 venv.bak/
 
 # instance data, databases
-instance/volumes/sqlite.db
+#instance/volumes/sqlite.db
 instance/volumes/sqlite-backup.db
 instance/volumes/sqlite-backup*
 migrations/
