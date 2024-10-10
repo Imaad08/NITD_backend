@@ -1,28 +1,26 @@
 import json, jwt
-from flask import Blueprint, request, jsonify, current_app, Response, g
+from flask import Blueprint, request, jsonify,  make_response, Response, current_app
 from flask_restful import Api, Resource # used for REST API building
-from datetime import datetime
+from flask_login import login_user, logout_user, current_user, login_required
+from werkzeug.security import check_password_hash
+from flask_cors import CORS
 from auth_middleware import token_required
+from werkzeug.security import generate_password_hash
+from datetime import datetime
 
 from model.users import User
 
 user_api = Blueprint('user_api', __name__,
-                   url_prefix='/api')
+                   url_prefix='/api/users')
 
 # API docs https://flask-restful.readthedocs.io/en/latest/api.html
 api = Api(user_api)
 
+
 class UserAPI:        
-    class _ID(Resource):  # Individual identification API operation
-        @token_required()
-        def get(self):
-            ''' Retrieve the current user from the token_required authenication check '''
-            current_user = g.current_user
-            ''' Return the current user as a json object '''
-            return jsonify(current_user.read())
-         
-    class _CRUD(Resource):  # Users API operation for Create, Read, Update, Delete 
-        def post(self): # Create method
+    class _CRUD(Resource):  # User API operation for Create, Read.  THe Update, Delete methods need to be implemeented
+        @token_required
+        def post(self, current_user): # Create method
             ''' Read data for json body '''
             body = request.get_json()
             
@@ -63,94 +61,63 @@ class UserAPI:
             # failure returns error
             return {'message': f'Processed {name}, either a format error or User ID {uid} is duplicate'}, 400
 
-        @token_required()
-        def get(self):
-            # retrieve the current user from the token_required authenication check  
-            current_user = g.current_user
-            # current_user extracted from the token using token_required decorator
-            users = User.query.all() # extract all users from the database
-             
-            # prepare a json list of user dictionaries
-            json_ready = []  
-            for user in users:
-                user_data = user.read()
-                if current_user.role == 'Admin' or current_user.id == user.id:
-                    user_data['access'] = ['rw'] # read-write access control 
-                else:
-                    user_data['access'] = ['ro'] # read-only access control 
-                json_ready.append(user_data)
-            
-            # return response, a json list of user dictionaries
-            return jsonify(json_ready)
-        
-        @token_required() 
-        def put(self):  # Update method
-            # retrieve the current user from the token_required authenication check  
-            current_user = g.current_user
-            
-            ''' Read data for json body '''
+        @token_required
+        def get(self, current_user): # Read Method
+            users = User.query.all()    # read/extract all users from database
+            json_ready = [user.read() for user in users]  # prepare output in json
+            return jsonify(json_ready)  # jsonify creates Flask response object, more specific to APIs than json.dumps
+    class _Delete(Resource):
+        # @token_required
+        def post(self):
             body = request.get_json()
-           
-            ''' Find user '''
-            id = body.get('id')
-            if id is None:  # if id is not provided
+            if not body:
                 return {
-                    "message": "User ID is required",
+                    "message": "Please provide user details",
                     "data": None,
                     "error": "Bad request"
                 }, 400
-            ''' Get requested user from the database '''    
-            user = User.query.get(id)
-            if user is None:    # if user is not found
-                return {
-                    "message": f"User {id} not found",
-                    "data": None,
-                    "error": "Not found"
-                }, 404
-            ''' Check if user is owner or admin ''' 
-            if not (current_user.role == 'Admin' or current_user.id == user.id):
-                return {
-                        "message": "Insufficient permissions, user is not owner or admin.",
-                        "data": None,
-                        "error": "Unauthorized"
-                    }, 403
-             
-            ''' Update any fields that have data '''
-            name = body.get('name')
-            if name is not None and name != '':
-                user.name = name
-                
+            ''' Get Data '''
             uid = body.get('uid')
-            if uid is not None and uid != '':  
-                user.uid = uid
+            if uid is None:
+                return {'message': f'User ID is missing'}, 400
+            password = body.get('password')
                 
-            dob = body.get('dob')   
-            if dob is not None and dob != '':
-                try:
-                    user.dob = datetime.strptime(dob, '%Y-%m-%d').date()
-                except:
-                    return {
-                        "message": f"Date of birth format error {dob}, must be yyyy-mm-dd",
-                        "data": None,
-                        "error": "Bad request",
-                    }, 400
-
-            ''' Commit changes to the database '''
-            user.update()
-            return jsonify(user.read())
-        
-        @token_required("Admin")
-        def delete(self): # Delete Method
-            body = request.get_json()
-            uid = body.get('uid')
+            ''' Find user '''
             user = User.query.filter_by(_uid=uid).first()
-            if user is None:
-                return {'message': f'User {uid} not found'}, 404
-            json = user.read()
-            user.delete() 
-            # 204 is the status code for delete with no json response
-            return f"Deleted user: {json}", 204 # use 200 to test with Postman
-         
+            if user is None or not user.is_password(password):
+                return {'message': f"Invalid user id or password"}, 400
+            if user:
+                try:
+                    ''' Delete user from database '''
+                    user.delete()
+                    return {'message': f'Successfully deleted user {uid}'}
+                except Exception as e:
+                    return {
+                        "error": "Something went wrong",
+                        "message": str(e)
+                    }, 500
+            return {
+                "message": "Error deleting user!",
+                "data": None,
+                "error": "Unauthorized"
+            }, 404
+            
+    class _Create(Resource):
+        def post(self):
+            body = request.get_json()
+            # Fetch data from the form
+            name = body.get('name')
+            uid = body.get('uid')
+            password = body.get('password')
+            if uid is not None:
+                new_user = User(name=name, uid=uid, password=password)
+                user = new_user.create()
+                if user:
+                    return user.read()
+                return {'message': f'Processed {name}, either a format error or User ID {uid} is duplicate'}, 400
+
+
+        
     class _Security(Resource):
         def post(self):
             try:
@@ -164,13 +131,13 @@ class UserAPI:
                 ''' Get Data '''
                 uid = body.get('uid')
                 if uid is None:
-                    return {'message': f'User ID is missing'}, 401
+                    return {'message': f'User ID is missing'}, 400
                 password = body.get('password')
                 
                 ''' Find user '''
                 user = User.query.filter_by(_uid=uid).first()
                 if user is None or not user.is_password(password):
-                    return {'message': f"Invalid user id or password"}, 401
+                    return {'message': f"Invalid user id or password"}, 400
                 if user:
                     try:
                         token = jwt.encode(
@@ -179,8 +146,7 @@ class UserAPI:
                             algorithm="HS256"
                         )
                         resp = Response("Authentication for %s successful" % (user._uid))
-                        resp.set_cookie(current_app.config["JWT_TOKEN_NAME"], 
-                                token,
+                        resp.set_cookie("jwt", token,
                                 max_age=3600,
                                 secure=True,
                                 httponly=True,
@@ -206,10 +172,50 @@ class UserAPI:
                         "error": str(e),
                         "data": None
                 }, 500
+        
+    class Login(Resource):
+        def post(self):
+            data = request.get_json()
 
+            uid = data.get('uid')
+            password = data.get('password')
+
+            if not uid or not password:
+                response = {'message': 'Invalid creds'}
+                return make_response(jsonify(response), 401)
+
+            user = User.query.filter_by(_uid=uid).first()
+
+            if user and user.is_password(password):
+         
+                response = {
+                    'message': 'Logged in successfully',
+                    'user': {
+                        'name': user.name,  
+                        'id': user.id
+                    }
+                }
+                return make_response(jsonify(response), 200)
+
+            response = {'message': 'Invalid id or pass'}
+            return make_response(jsonify(response), 401)
+
+
+
+    class Logout(Resource):
+        @login_required
+        def post(self):
+            logout_user()
+            return {'message': 'Logged out successfully'}, 200
             
+   
+
+                 
+
     # building RESTapi endpoint
-    api.add_resource(_ID, '/id')
-    api.add_resource(_CRUD, '/users')
+    api.add_resource(_CRUD, '/')
     api.add_resource(_Security, '/authenticate')
-    
+    api.add_resource(Login, '/login')
+    api.add_resource(Logout, '/logout')
+    api.add_resource(_Create, '/create')
+    api.add_resource(_Delete, '/delete')
